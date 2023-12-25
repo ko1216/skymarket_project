@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "phonenumber_field",
     "djoser",
     "corsheaders",
+    "django_filters",
 
     "users",
     "ads",

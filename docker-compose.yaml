@@ -1,0 +1,35 @@
+version: '3'
+
+services:
+  web:
+    image: "skymarket:dev"
+    build: .
+    tty: true
+    command: sh -c "python skymarket/manage.py migrate && python skymarket/manage.py runserver 0.0.0.0:8000"
+    ports:
+      - '8000:8000'
+    restart: on-failure
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=secretkey
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:

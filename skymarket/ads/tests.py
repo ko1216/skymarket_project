@@ -5,7 +5,7 @@ from rest_framework.reverse import reverse
 from rest_framework.test import APITestCase
 
 from users.models import User
-from ads.models import Ad
+from ads.models import Ad, Comment
 
 
 class AdListTestCase(APITestCase):
@@ -522,6 +522,496 @@ class DeleteAdTestCase(APITestCase):
         self.client.force_authenticate(user=self.admin)
 
         response = self.client.delete(reverse('ads:ad_delete', kwargs={'pk': self.ad1.pk}))
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT
+        )
+
+
+class ListCommentTestCase(APITestCase):
+    def setUp(self):
+        self.user_me = User.objects.create(
+            email='test1@mail.com',
+            password='123qwe456rty'
+        )
+        self.another_user = User.objects.create(
+            email='test@mail.com',
+            password='123qwe456rty'
+        )
+        self.ad1 = Ad.objects.create(
+            title='Test1',
+            price=100.99,
+            author=self.user_me,
+        )
+        self.ad2 = Ad.objects.create(
+            title='Test2',
+            price=100.99,
+            author=self.another_user,
+        )
+        self.comment1 = Comment.objects.create(
+            text='Comment1',
+            ad=self.ad2,
+            author=self.another_user,
+        )
+        time.sleep(0.01)
+        self.comment2 = Comment.objects.create(
+            text='Comment2',
+            ad=self.ad1,
+            author=self.user_me,
+        )
+        time.sleep(0.01)
+        self.comment3 = Comment.objects.create(
+            text='Comment3',
+            ad=self.ad2,
+            author=self.user_me,
+        )
+        time.sleep(0.01)
+        self.comment4 = Comment.objects.create(
+            text='Comment4',
+            ad=self.ad1,
+            author=self.another_user,
+        )
+        time.sleep(0.01)
+        self.comment5 = Comment.objects.create(
+            text='Comment5',
+            ad=self.ad2,
+            author=self.another_user,
+        )
+
+    def test_not_authenticated(self):
+        response = self.client.get(reverse('ads:comments', kwargs={'ad_pk': self.ad1.pk}))
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED
+        )
+
+        self.maxDiff = None
+        self.assertEqual(
+            response.json(),
+            {
+                'detail':
+                    'Authentication credentials were not provided.'
+            }
+        )
+
+    def test_get_my_list_200(self):
+        self.client.force_authenticate(user=self.user_me)
+
+        response = self.client.get(reverse('ads:comments', kwargs={'ad_pk': self.ad1.pk}))
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK
+        )
+
+        self.maxDiff = None
+        self.assertEqual(
+            response.json(),
+            {
+                'count': 2,
+                'next': None,
+                'previous': None,
+                'results': [
+                    {
+                        'ad': self.comment4.ad.pk,
+                        'author': self.comment4.author.pk,
+                        'created_at': self.comment4.created_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+                        'text': self.comment4.text
+                    },
+                    {
+                        'ad': self.comment2.ad.pk,
+                        'author': self.comment2.author.pk,
+                        'created_at': self.comment2.created_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+                        'text': self.comment2.text
+                    },
+                ]
+            }
+        )
+
+
+class CreateCommentTestCase(APITestCase):
+    def setUp(self):
+        self.user_me = User.objects.create(
+            email='test1@mail.com',
+            password='123qwe456rty'
+        )
+        self.ad1 = Ad.objects.create(
+            title='Test1',
+            price=100.99,
+            author=self.user_me,
+        )
+        self.ad2 = Ad.objects.create(
+            title='Test2',
+            price=0,
+            author=self.user_me,
+        )
+        self.comment1 = {
+            'text': '1'
+        }
+        self.comment2 = {
+            'text': '2'
+        }
+
+    def test_not_authenticated(self):
+        response = self.client.post(
+            reverse('ads:comments_create', kwargs={'ad_pk': self.ad1.pk}),
+            self.comment1
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED
+        )
+
+        self.maxDiff = None
+        self.assertEqual(
+            response.json(),
+            {
+                'detail':
+                    'Authentication credentials were not provided.'
+            }
+        )
+
+    def test_create_comment_201(self):
+        self.client.force_authenticate(user=self.user_me)
+
+        response = self.client.post(
+            reverse('ads:comments_create', kwargs={'ad_pk': self.ad1.pk}),
+            self.comment1
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED
+        )
+
+    def test_create_comment_404(self):
+        self.client.force_authenticate(user=self.user_me)
+
+        response = self.client.post(
+            reverse('ads:comments_create', kwargs={'ad_pk': 1000}),
+            self.comment1
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND
+        )
+
+        self.assertEqual(
+            response.json(),
+            {
+                'detail': 'Not found.'
+            }
+        )
+
+
+class RetrieveCommentTestCase(APITestCase):
+    def setUp(self):
+        self.user_me = User.objects.create(
+            email='test1@mail.com',
+            password='123qwe456rty'
+        )
+        self.ad1 = Ad.objects.create(
+            title='Test1',
+            price=100.99,
+            author=self.user_me,
+        )
+        self.comment1 = Comment.objects.create(
+            text='Comment1',
+            ad=self.ad1,
+            author=self.user_me,
+        )
+
+    def test_not_authenticated(self):
+        response = self.client.get(
+            reverse('ads:comments_retrieve',
+                    kwargs={
+                        'ad_pk': self.ad1.pk,
+                        'com_pk': self.comment1.pk
+                    })
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED
+        )
+
+        self.maxDiff = None
+        self.assertEqual(
+            response.json(),
+            {
+                'detail':
+                    'Authentication credentials were not provided.'
+            }
+        )
+
+    def test_get_comment_200(self):
+        self.client.force_authenticate(user=self.user_me)
+
+        response = self.client.get(
+            reverse('ads:comments_retrieve',
+                    kwargs={
+                        'ad_pk': self.ad1.pk,
+                        'com_pk': self.comment1.pk
+                    })
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK
+        )
+
+        self.maxDiff = None
+        self.assertEqual(
+            response.json(),
+            {
+                'ad': self.comment1.ad.pk,
+                'author': self.comment1.author.pk,
+                'created_at': self.comment1.created_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+                'text': self.comment1.text
+            }
+        )
+
+
+class PatchCommentTestCase(APITestCase):
+    def setUp(self):
+        self.user_me = User.objects.create(
+            email='test1@mail.com',
+            password='123qwe456rty'
+        )
+        self.another_user = User.objects.create(
+            email='test@mail.com',
+            password='123qwe456rty'
+        )
+        self.admin = User.objects.create(
+            email='admin@mail.com',
+            password='123qwe456rty',
+            role='admin'
+        )
+        self.ad1 = Ad.objects.create(
+            title='Test1',
+            price=100.99,
+            author=self.user_me,
+        )
+        self.comment1 = Comment.objects.create(
+            text='Comment1',
+            ad=self.ad1,
+            author=self.user_me,
+        )
+        self.data = {
+            'text': 'Updated comment'
+        }
+
+    def test_not_authenticated(self):
+        response = self.client.patch(
+            reverse('ads:comments_patch',
+                    kwargs={
+                        'ad_pk': self.ad1.pk,
+                        'com_pk': self.comment1.pk
+                    }),
+            self.data
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED
+        )
+
+        self.maxDiff = None
+        self.assertEqual(
+            response.json(),
+            {
+                'detail':
+                    'Authentication credentials were not provided.'
+            }
+        )
+
+    def test_no_permission(self):
+        self.client.force_authenticate(user=self.another_user)
+
+        response = self.client.patch(
+            reverse('ads:comments_patch',
+                    kwargs={
+                        'ad_pk': self.ad1.pk,
+                        'com_pk': self.comment1.pk
+                    }),
+            self.data
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN
+        )
+
+        self.maxDiff = None
+        self.assertEqual(
+            response.json(),
+            {
+                'detail':
+                    'You are not the owner or administrator of this comment'
+            }
+        )
+
+    def test_patch_200_by_owner(self):
+        self.client.force_authenticate(user=self.user_me)
+
+        response = self.client.patch(
+            reverse('ads:comments_patch',
+                    kwargs={
+                        'ad_pk': self.ad1.pk,
+                        'com_pk': self.comment1.pk
+                    }),
+            self.data
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK
+        )
+
+        self.maxDiff = None
+        self.assertEqual(
+            response.json(),
+            {
+                'ad': self.comment1.ad.pk,
+                'author': self.comment1.author.pk,
+                'created_at': self.comment1.created_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+                'text': self.data['text']
+            }
+        )
+
+    def test_patch_200_by_admin(self):
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.patch(
+            reverse('ads:comments_patch',
+                    kwargs={
+                        'ad_pk': self.ad1.pk,
+                        'com_pk': self.comment1.pk
+                    }),
+            self.data
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK
+        )
+
+        self.maxDiff = None
+        self.assertEqual(
+            response.json(),
+            {
+                'ad': self.comment1.ad.pk,
+                'author': self.comment1.author.pk,
+                'created_at': self.comment1.created_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+                'text': self.data['text']
+            }
+        )
+
+
+class DestroyCommentTestCase(APITestCase):
+    def setUp(self):
+        self.user_me = User.objects.create(
+            email='test1@mail.com',
+            password='123qwe456rty'
+        )
+        self.another_user = User.objects.create(
+            email='test@mail.com',
+            password='123qwe456rty'
+        )
+        self.admin = User.objects.create(
+            email='admin@mail.com',
+            password='123qwe456rty',
+            role='admin'
+        )
+        self.ad1 = Ad.objects.create(
+            title='Test1',
+            price=100.99,
+            author=self.user_me,
+        )
+        self.comment1 = Comment.objects.create(
+            text='Comment1',
+            ad=self.ad1,
+            author=self.user_me,
+        )
+
+    def test_not_authenticated(self):
+        response = self.client.delete(
+            reverse('ads:comments_delete',
+                    kwargs={
+                        'ad_pk': self.ad1.pk,
+                        'com_pk': self.comment1.pk
+                    })
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED
+        )
+
+        self.maxDiff = None
+        self.assertEqual(
+            response.json(),
+            {
+                'detail':
+                    'Authentication credentials were not provided.'
+            }
+        )
+
+    def test_no_permission(self):
+        self.client.force_authenticate(user=self.another_user)
+
+        response = self.client.delete(
+            reverse('ads:comments_delete',
+                    kwargs={
+                        'ad_pk': self.ad1.pk,
+                        'com_pk': self.comment1.pk
+                    })
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN
+        )
+
+        self.maxDiff = None
+        self.assertEqual(
+            response.json(),
+            {
+                'detail':
+                    'You are not the owner or administrator of this comment'
+            }
+        )
+
+    def test_delete_204_by_owner(self):
+        self.client.force_authenticate(user=self.user_me)
+
+        response = self.client.delete(
+            reverse('ads:comments_delete',
+                    kwargs={
+                        'ad_pk': self.ad1.pk,
+                        'com_pk': self.comment1.pk
+                    })
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT
+        )
+
+    def test_delete_204_by_admin(self):
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.delete(
+            reverse('ads:comments_delete',
+                    kwargs={
+                        'ad_pk': self.ad1.pk,
+                        'com_pk': self.comment1.pk
+                    })
+        )
 
         self.assertEqual(
             response.status_code,

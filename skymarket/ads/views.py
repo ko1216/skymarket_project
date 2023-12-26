@@ -1,18 +1,21 @@
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.generics import ListAPIView, CreateAPIView, RetrieveAPIView, UpdateAPIView, DestroyAPIView, \
     get_object_or_404
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.viewsets import ModelViewSet
 
 from ads.models import Ad, Comment
 from ads.serializers import AdSerializer, CommentSerializer
 from ads.permissions import IsOwnerOrAdmin, IsCommentOwnerOrAdmin
 from ads.pagination import AdPagination, CommentPagination
+from ads.filters import AdFilter
 
 
 class AdListAPIView(ListAPIView):
     serializer_class = AdSerializer
     pagination_class = AdPagination
     permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = AdFilter
 
     def get_queryset(self):
         ordering = self.request.query_params.get('ordering', '-created_at')
